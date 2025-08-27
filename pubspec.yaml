@@ -32,6 +32,10 @@ dependencies:
     sdk: flutter
   flutter_animate: ^4.5.0
 
+#  image picker
+  image_picker: ^1.0.7
+  permission_handler: ^11.0.1
+
     # Supabase
   supabase_flutter: ^2.3.4
   app_links: ^6.1.4

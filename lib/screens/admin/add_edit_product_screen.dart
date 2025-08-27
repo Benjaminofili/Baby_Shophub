@@ -1,5 +1,8 @@
 // File: lib/screens/admin/add_edit_product_screen.dart
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io';
 import '../../../services/admin_service.dart';
 import '../../../components/loading_widget.dart';
 import '../../../components/custom_app_bar.dart';
@@ -34,6 +37,13 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   bool _featured = false;
   bool _safetyCertified = false;
   bool _isLoading = false;
+
+  // Image handling variables
+  File? _primaryImage;
+  List<File> _additionalImages = [];
+  String? _existingPrimaryImageUrl;
+  List<String> _existingAdditionalImageUrls = [];
+  final ImagePicker _picker = ImagePicker();
 
   final List<String> _categories = [
     'feeding',
@@ -76,6 +86,12 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       _isActive = product['is_active'] ?? true;
       _featured = product['featured'] ?? false;
       _safetyCertified = product['safety_certified'] ?? false;
+
+      // Initialize existing images
+      _existingPrimaryImageUrl = product['image_url'];
+      if (product['image_urls'] != null) {
+        _existingAdditionalImageUrls = List<String>.from(product['image_urls']);
+      }
     }
   }
 
@@ -93,6 +109,79 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     super.dispose();
   }
 
+  Future<void> _pickPrimaryImage() async {
+    // Request storage permission
+    final status = await Permission.photos.request();
+    if (status != PermissionStatus.granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Permission denied')),
+      );
+      return;
+    }
+
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        setState(() {
+          _primaryImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error picking image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickAdditionalImages() async {
+    try {
+      final List<XFile> images = await _picker.pickMultiImage(
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (images.isNotEmpty) {
+        setState(() {
+          _additionalImages.addAll(images.map((xFile) => File(xFile.path)));
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error picking images: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _removePrimaryImage() {
+    setState(() {
+      _primaryImage = null;
+      _existingPrimaryImageUrl = null;
+    });
+  }
+
+  void _removeAdditionalImage(int index, {bool isExisting = false}) {
+    setState(() {
+      if (isExisting) {
+        _existingAdditionalImageUrls.removeAt(index);
+      } else {
+        _additionalImages.removeAt(index);
+      }
+    });
+  }
+
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -103,8 +192,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     await AdminService.checkUserRole();
     try {
       if (widget.product == null) {
-        // Create new product
-        await AdminService.createProduct(
+        // Create new product with images
+        await AdminService.createProductWithImages(
           name: _nameController.text.trim(),
           description: _descriptionController.text.trim(),
           price: double.parse(_priceController.text),
@@ -119,6 +208,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           isActive: _isActive,
           featured: _featured,
           safetyCertified: _safetyCertified,
+          primaryImage: _primaryImage,
+          additionalImages: _additionalImages.isNotEmpty ? _additionalImages : null,
         );
 
         if (!mounted) return;
@@ -126,8 +217,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           SnackBar(content: Text('Product created successfully')),
         );
       } else {
-        // Update existing product
-        await AdminService.updateProduct(widget.product!['id'], {
+        // Update existing product with image management
+        final updates = {
           'name': _nameController.text.trim(),
           'description': _descriptionController.text.trim(),
           'price': double.parse(_priceController.text),
@@ -142,7 +233,20 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           'is_active': _isActive,
           'featured': _featured,
           'safety_certified': _safetyCertified,
-        });
+        };
+
+        // Handle image updates manually if needed
+        if (_existingAdditionalImageUrls.isNotEmpty || _additionalImages.isNotEmpty) {
+          updates['image_urls'] = _existingAdditionalImageUrls;
+        }
+
+        await AdminService.updateProductWithImages(
+          widget.product!['id'],
+          updates,
+          newPrimaryImage: _primaryImage,
+          newAdditionalImages: _additionalImages.isNotEmpty ? _additionalImages : null,
+          replacePrimaryImage: _primaryImage != null,
+        );
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -183,6 +287,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
             children: [
               _buildBasicInfoSection(),
               SizedBox(height: 24),
+              _buildImageSection(),
+              SizedBox(height: 24),
               _buildCategorySection(),
               SizedBox(height: 24),
               _buildDetailsSection(),
@@ -199,6 +305,273 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildImageSection() {
+    return _buildSection(
+      'Product Images',
+      [
+        // Primary Image Section
+        Text(
+          'Primary Image',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        SizedBox(height: 12),
+        Container(
+          height: 120,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.grey[50],
+          ),
+          child: _primaryImage != null || _existingPrimaryImageUrl != null
+              ? Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: _primaryImage != null
+                    ? Image.file(
+                  _primaryImage!,
+                  width: double.infinity,
+                  height: 120,
+                  fit: BoxFit.cover,
+                )
+                    : Image.network(
+                  _existingPrimaryImageUrl!,
+                  width: double.infinity,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: double.infinity,
+                      height: 120,
+                      color: Colors.grey[300],
+                      child: Icon(Icons.error, size: 40),
+                    );
+                  },
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: _removePrimaryImage,
+                  child: Container(
+                    padding: EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+              : InkWell(
+            onTap: _pickPrimaryImage,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 40,
+                  color: Colors.grey[600],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Add Primary Image',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_primaryImage == null && _existingPrimaryImageUrl == null)
+          Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: ElevatedButton.icon(
+              onPressed: _pickPrimaryImage,
+              icon: Icon(Icons.camera_alt),
+              label: Text('Choose Primary Image'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+
+        SizedBox(height: 24),
+
+        // Additional Images Section
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Additional Images',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _pickAdditionalImages,
+              icon: Icon(Icons.add),
+              label: Text('Add Images'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 12),
+
+        // Display existing additional images
+        if (_existingAdditionalImageUrls.isNotEmpty || _additionalImages.isNotEmpty)
+          Container(
+            height: 100,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                // Existing images from server
+                ..._existingAdditionalImageUrls.asMap().entries.map((entry) {
+                  int index = entry.key;
+                  String imageUrl = entry.value;
+                  return Container(
+                    margin: EdgeInsets.only(right: 8),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            imageUrl,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                width: 100,
+                                height: 100,
+                                color: Colors.grey[300],
+                                child: Icon(Icons.error),
+                              );
+                            },
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GestureDetector(
+                            onTap: () => _removeAdditionalImage(index, isExisting: true),
+                            child: Container(
+                              padding: EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+
+                // New images from file picker
+                ..._additionalImages.asMap().entries.map((entry) {
+                  int index = entry.key;
+                  File imageFile = entry.value;
+                  return Container(
+                    margin: EdgeInsets.only(right: 8),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            imageFile,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GestureDetector(
+                            onTap: () => _removeAdditionalImage(index, isExisting: false),
+                            child: Container(
+                              padding: EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          )
+        else
+          Container(
+            height: 100,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey[50],
+            ),
+            child: InkWell(
+              onTap: _pickAdditionalImages,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 30,
+                    color: Colors.grey[600],
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Add Additional Images',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -288,7 +661,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 value: subcategory,
                 child: Text(subcategory.replaceAll('_', ' ').toUpperCase()),
               );
-            }), // Map subcategories to DropdownMenuItem
+            }),
           ],
           onChanged: (value) {
             setState(() {

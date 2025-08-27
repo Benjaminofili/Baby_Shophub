@@ -1,10 +1,343 @@
 // File: lib/services/admin_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
+import 'dart:typed_data';
 
 class AdminService {
   static final SupabaseClient _supabase = Supabase.instance.client;
+  static const String _storageBucket = 'products'; // Your storage bucket name
 
-  // Product Management
+  // Image Upload Methods
+  static Future<String> uploadProductImage(
+      File imageFile, {
+        String? productId,
+        String? customFileName,
+      }) async {
+    try {
+      // Generate unique filename if not provided
+      final fileName = customFileName ??
+          '${productId ?? DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split('/').last}';
+
+      // Upload to Supabase Storage
+      final String path = await _supabase.storage
+          .from(_storageBucket)
+          .upload('images/$fileName', imageFile);
+
+      // Get the public URL
+      final String publicUrl = _supabase.storage
+          .from(_storageBucket)
+          .getPublicUrl('images/$fileName');
+
+      return publicUrl;
+    } catch (e) {
+      print('Error uploading image: $e');
+      rethrow;
+    }
+  }
+
+  // For web platforms or when you have Uint8List
+  static Future<String> uploadProductImageFromBytes(
+      Uint8List imageBytes,
+      String fileName, {
+        String? productId,
+      }) async {
+    try {
+      // Generate unique filename
+      final uniqueFileName = '${productId ?? DateTime.now().millisecondsSinceEpoch}_$fileName';
+
+      // Upload to Supabase Storage
+      final String path = await _supabase.storage
+          .from(_storageBucket)
+          .uploadBinary('images/$uniqueFileName', imageBytes);
+
+      // Get the public URL
+      final String publicUrl = _supabase.storage
+          .from(_storageBucket)
+          .getPublicUrl('images/$uniqueFileName');
+
+      return publicUrl;
+    } catch (e) {
+      print('Error uploading image from bytes: $e');
+      rethrow;
+    }
+  }
+
+  // Upload multiple images
+  static Future<List<String>> uploadMultipleProductImages(
+      List<File> imageFiles, {
+        String? productId,
+      }) async {
+    try {
+      final List<String> imageUrls = [];
+
+      for (int i = 0; i < imageFiles.length; i++) {
+        final file = imageFiles[i];
+        final fileName = '${productId ?? DateTime.now().millisecondsSinceEpoch}_image_$i.${file.path.split('.').last}';
+
+        final imageUrl = await uploadProductImage(file, customFileName: fileName);
+        imageUrls.add(imageUrl);
+      }
+
+      return imageUrls;
+    } catch (e) {
+      print('Error uploading multiple images: $e');
+      rethrow;
+    }
+  }
+
+  // Delete image from storage
+  static Future<void> deleteProductImage(String imageUrl) async {
+    try {
+      // Extract the file path from the URL
+      final uri = Uri.parse(imageUrl);
+      final pathSegments = uri.pathSegments;
+
+      // Find the path after the bucket name
+      final bucketIndex = pathSegments.indexOf(_storageBucket);
+      if (bucketIndex != -1 && bucketIndex + 1 < pathSegments.length) {
+        final filePath = pathSegments.sublist(bucketIndex + 1).join('/');
+
+        await _supabase.storage
+            .from(_storageBucket)
+            .remove([filePath]);
+      }
+    } catch (e) {
+      print('Error deleting image: $e');
+      // Don't rethrow here as we might want to continue even if image deletion fails
+    }
+  }
+
+  // Enhanced Product Creation with Image Upload
+  static Future<Map<String, dynamic>> createProductWithImages({
+    required String name,
+    required String description,
+    required double price,
+    required String category,
+    String? subcategory,
+    String? brand,
+    String? ageRange,
+    String? material,
+    double? weightKg,
+    String? dimensionsCm,
+    required int stockQuantity,
+    bool isActive = true,
+    bool featured = false,
+    bool safetyCertified = false,
+    File? primaryImage,
+    List<File>? additionalImages,
+    List<String>? tags,
+  }) async {
+    try {
+      String? primaryImageUrl;
+      List<String> additionalImageUrls = [];
+
+      // Generate product ID first for consistent naming
+      final tempProductId = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Upload primary image if provided
+      if (primaryImage != null) {
+        primaryImageUrl = await uploadProductImage(
+          primaryImage,
+          productId: tempProductId,
+          customFileName: '${tempProductId}_primary.${primaryImage.path.split('.').last}',
+        );
+      }
+
+      // Upload additional images if provided
+      if (additionalImages != null && additionalImages.isNotEmpty) {
+        additionalImageUrls = await uploadMultipleProductImages(
+          additionalImages,
+          productId: tempProductId,
+        );
+      }
+
+      // Create the product with image URLs
+      final productData = {
+        'name': name,
+        'description': description,
+        'price': price,
+        'category': category,
+        'subcategory': subcategory,
+        'brand': brand,
+        'age_range': ageRange,
+        'material': material,
+        'weight_kg': weightKg,
+        'dimensions_cm': dimensionsCm,
+        'stock_quantity': stockQuantity,
+        'is_active': isActive,
+        'featured': featured,
+        'safety_certified': safetyCertified,
+        'image_url': primaryImageUrl,
+        'image_urls': additionalImageUrls.isNotEmpty ? additionalImageUrls : null,
+        'tags': tags,
+      };
+
+      final response = await _supabase.from('products').insert(productData).select().single();
+
+      print('Product created successfully with images: $response');
+      return response;
+    } catch (e) {
+      print('Error in createProductWithImages: $e');
+      rethrow;
+    }
+  }
+
+  // Enhanced Product Update with Image Management
+  static Future<void> updateProductWithImages(
+      String productId,
+      Map<String, dynamic> updates, {
+        File? newPrimaryImage,
+        List<File>? newAdditionalImages,
+        bool replacePrimaryImage = false,
+        bool replaceAllImages = false,
+      }) async {
+    try {
+      // Get current product to manage existing images
+      final currentProduct = await _supabase
+          .from('products')
+          .select('image_url, image_urls')
+          .eq('id', productId)
+          .single();
+
+      final Map<String, dynamic> finalUpdates = Map.from(updates);
+
+      // Handle primary image update
+      if (newPrimaryImage != null) {
+        // Delete old primary image if replacing
+        if (replacePrimaryImage && currentProduct['image_url'] != null) {
+          await deleteProductImage(currentProduct['image_url']);
+        }
+
+        // Upload new primary image
+        final newPrimaryUrl = await uploadProductImage(
+          newPrimaryImage,
+          productId: productId,
+          customFileName: '${productId}_primary_${DateTime.now().millisecondsSinceEpoch}.${newPrimaryImage.path.split('.').last}',
+        );
+        finalUpdates['image_url'] = newPrimaryUrl;
+      }
+
+      // Handle additional images update
+      if (newAdditionalImages != null) {
+        List<String> currentImageUrls = [];
+
+        if (currentProduct['image_urls'] != null) {
+          currentImageUrls = List<String>.from(currentProduct['image_urls']);
+        }
+
+        // Delete old images if replacing all
+        if (replaceAllImages && currentImageUrls.isNotEmpty) {
+          for (final imageUrl in currentImageUrls) {
+            await deleteProductImage(imageUrl);
+          }
+          currentImageUrls.clear();
+        }
+
+        // Upload new additional images
+        final newImageUrls = await uploadMultipleProductImages(
+          newAdditionalImages,
+          productId: productId,
+        );
+
+        // Combine with existing images (if not replacing all)
+        final allImageUrls = [...currentImageUrls, ...newImageUrls];
+        finalUpdates['image_urls'] = allImageUrls.isNotEmpty ? allImageUrls : null;
+      }
+
+      // Add timestamp
+      finalUpdates['updated_at'] = DateTime.now().toIso8601String();
+
+      // Update the product
+      await _supabase
+          .from('products')
+          .update(finalUpdates)
+          .eq('id', productId);
+
+    } catch (e) {
+      print('Error updating product with images: $e');
+      rethrow;
+    }
+  }
+
+  // Enhanced Product Deletion with Image Cleanup
+  static Future<void> deleteProductWithImages(String productId) async {
+    try {
+      // Get product images before deletion
+      final product = await _supabase
+          .from('products')
+          .select('image_url, image_urls')
+          .eq('id', productId)
+          .single();
+
+      // Delete primary image
+      if (product['image_url'] != null) {
+        await deleteProductImage(product['image_url']);
+      }
+
+      // Delete additional images
+      if (product['image_urls'] != null) {
+        final imageUrls = List<String>.from(product['image_urls']);
+        for (final imageUrl in imageUrls) {
+          await deleteProductImage(imageUrl);
+        }
+      }
+
+      // Delete the product record
+      await _supabase.from('products').delete().eq('id', productId);
+
+    } catch (e) {
+      print('Error deleting product with images: $e');
+      rethrow;
+    }
+  }
+
+  // Helper method to remove specific image from product
+  static Future<void> removeImageFromProduct(
+      String productId,
+      String imageUrl, {
+        bool isPrimary = false,
+      }) async {
+    try {
+      // Delete the image from storage
+      await deleteProductImage(imageUrl);
+
+      if (isPrimary) {
+        // Remove primary image
+        await _supabase
+            .from('products')
+            .update({
+          'image_url': null,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+            .eq('id', productId);
+      } else {
+        // Remove from additional images array
+        final product = await _supabase
+            .from('products')
+            .select('image_urls')
+            .eq('id', productId)
+            .single();
+
+        if (product['image_urls'] != null) {
+          final currentUrls = List<String>.from(product['image_urls']);
+          currentUrls.remove(imageUrl);
+
+          await _supabase
+              .from('products')
+              .update({
+            'image_urls': currentUrls.isNotEmpty ? currentUrls : null,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+              .eq('id', productId);
+        }
+      }
+    } catch (e) {
+      print('Error removing image from product: $e');
+      rethrow;
+    }
+  }
+
+  // Product Management (existing methods)
   static Future<List<Map<String, dynamic>>> getAllProducts({
     String? category,
     String? searchQuery,
