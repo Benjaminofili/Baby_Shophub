@@ -263,15 +263,23 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ),
                             ),
                             // Main image
-                            // ClipRRect(
-                            //   borderRadius: BorderRadius.circular(20),
-                            //   child: Image.asset(
-                            //     "assets/Happybaby.gif",
-                            //     width: screenWidth * 0.8,
-                            //     height: screenHeight * 0.25,
-                            //     fit: BoxFit.cover,
-                            //   ),
-                            // ),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                width: MediaQuery.of(context).size.width * 0.8,
+                                height: MediaQuery.of(context).size.height * 0.2,
+                                constraints: const BoxConstraints(
+                                  minWidth: 200,
+                                  maxWidth: 450,
+                                  minHeight: 120,
+                                  maxHeight: 280,
+                                ),
+                                child: Image.asset(
+                                  "assets/logo.webp",
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),

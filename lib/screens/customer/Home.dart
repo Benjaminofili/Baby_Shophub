@@ -1,4 +1,4 @@
-// Updated Home.dart - Remove the bottom navigation and update navigation logic
+// Fixed Home.dart - Proper favorite state management
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme.dart';
@@ -59,12 +59,12 @@ class _HomePageDemoState extends State<HomePageDemo> {
           _categories = categories
               .map<Map<String, dynamic>>(
                 (category) => {
-                  'id': category['id'],
-                  'name': category['name'],
-                  'icon': SupabaseService.getCategoryIcon(category['name']),
-                  'color': SupabaseService.getCategoryColor(category['name']),
-                },
-              )
+              'id': category['id'],
+              'name': category['name'],
+              'icon': SupabaseService.getCategoryIcon(category['name']),
+              'color': SupabaseService.getCategoryColor(category['name']),
+            },
+          )
               .toList();
           _isLoadingCategories = false;
         });
@@ -97,15 +97,15 @@ class _HomePageDemoState extends State<HomePageDemo> {
           _featuredProducts = featuredProducts
               .map(
                 (product) => SupabaseService.formatProductForDisplay(product),
-              )
+          )
               .toList();
           _newArrivals = newArrivals
               .map(
                 (product) => SupabaseService.formatProductForDisplay(
-                  product,
-                  isNew: true,
-                ),
-              )
+              product,
+              isNew: true,
+            ),
+          )
               .toList();
           _isLoadingProducts = false;
         });
@@ -182,7 +182,7 @@ class _HomePageDemoState extends State<HomePageDemo> {
                     OfferSection(
                       title: '🎉 Special Offer!',
                       description:
-                          'Get 30% off on all baby clothing items. Limited time offer!',
+                      'Get 30% off on all baby clothing items. Limited time offer!',
                       buttonText: 'Shop Now',
                       onButtonPressed: () =>
                           _navigateToCategoryProducts('Clothing'),
@@ -242,10 +242,35 @@ class _HomePageDemoState extends State<HomePageDemo> {
     Navigator.pushNamed(context, '/search', arguments: {'query': query.trim()});
   }
 
+  // FIXED: Proper favorite toggle with immediate UI update
   Future<void> _toggleFavorite(String productId) async {
     try {
+      debugPrint('🔄 Home: Toggling favorite for $productId');
+
+      // Optimistic UI update - update state immediately
+      final wasLiked = _favoriteProducts.contains(productId);
+      setState(() {
+        if (wasLiked) {
+          _favoriteProducts.remove(productId);
+        } else {
+          _favoriteProducts.add(productId);
+        }
+      });
+
+      // Show immediate feedback
+      _showSuccessSnackBar(
+          wasLiked ? 'Removed from favorites' : 'Added to favorites'
+      );
+
+      // Perform the actual API call
       await SupabaseService.toggleFavorite(productId);
 
+      debugPrint('✅ Home: Favorite toggle completed successfully');
+
+    } catch (e) {
+      debugPrint('❌ Home: Error toggling favorite: $e');
+
+      // Revert optimistic update on error
       setState(() {
         if (_favoriteProducts.contains(productId)) {
           _favoriteProducts.remove(productId);
@@ -253,8 +278,7 @@ class _HomePageDemoState extends State<HomePageDemo> {
           _favoriteProducts.add(productId);
         }
       });
-    } catch (e) {
-      debugPrint('Error toggling favorite: $e');
+
       _showErrorSnackBar('Failed to update favorites');
     }
   }

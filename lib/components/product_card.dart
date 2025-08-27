@@ -1,4 +1,4 @@
-// Fixed product_card.dart - Resolving layout overflow and sizing issues
+// Fixed product_card.dart - Better state management with parent coordination
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/supabase_service.dart';
@@ -32,21 +32,6 @@ class DynamicProductCard extends StatefulWidget {
 class _DynamicProductCardState extends State<DynamicProductCard> {
   bool _isAddingToCart = false;
   bool _isTogglingFavorite = false;
-  late bool _isFavorite;
-
-  @override
-  void initState() {
-    super.initState();
-    _isFavorite = widget.isFavorite;
-  }
-
-  @override
-  void didUpdateWidget(DynamicProductCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.isFavorite != widget.isFavorite) {
-      _isFavorite = widget.isFavorite;
-    }
-  }
 
   Future<void> _handleAddToCart() async {
     if (_isAddingToCart) return;
@@ -89,23 +74,11 @@ class _DynamicProductCardState extends State<DynamicProductCard> {
     setState(() => _isTogglingFavorite = true);
 
     try {
-      await SupabaseService.toggleFavorite(widget.product['id']);
+      debugPrint('🔄 ProductCard: Toggling favorite for ${widget.product['id']}');
 
-      if (mounted) {
-        setState(() {
-          _isFavorite = !_isFavorite;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isFavorite ? 'Added to favorites' : 'Removed from favorites'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      }
-
+      // Let the parent handle the state update and UI feedback
       widget.onFavoriteTap?.call();
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -296,8 +269,8 @@ class _DynamicProductCardState extends State<DynamicProductCard> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
                     : Icon(
-                  _isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: _isFavorite ? Colors.red : Colors.grey[600],
+                  widget.isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: widget.isFavorite ? Colors.red : Colors.grey[600],
                   size: 16,
                 ),
                 onPressed: _isTogglingFavorite ? null : _handleFavoriteToggle,

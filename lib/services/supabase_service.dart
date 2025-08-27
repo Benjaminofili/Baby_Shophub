@@ -142,19 +142,32 @@ class SupabaseService {
   }
 
   // Favorites
+// Add this improved version of favorites methods to your SupabaseService class
+
+// Favorites - Improved Version
   static Future<Set<String>> getUserFavorites() async {
     try {
       final user = _client.auth.currentUser;
-      if (user == null) return {};
+      if (user == null) {
+        debugPrint('No authenticated user for favorites');
+        return {};
+      }
+
+      debugPrint('Loading favorites for user: ${user.id}');
 
       final response = await _client
           .from('favorites')
           .select('product_id')
           .eq('user_id', user.id);
 
-      return response
+      debugPrint('Raw favorites response: $response');
+
+      final favoriteIds = response
           .map<String>((fav) => fav['product_id'].toString())
           .toSet();
+
+      debugPrint('Parsed favorite IDs: $favoriteIds');
+      return favoriteIds;
     } catch (e) {
       debugPrint('Error loading favorites: $e');
       return {};
@@ -164,62 +177,131 @@ class SupabaseService {
   static Future<List<Map<String, dynamic>>> getFavoriteProducts() async {
     try {
       final user = _client.auth.currentUser;
-      if (user == null) return [];
+      if (user == null) {
+        debugPrint('No authenticated user for favorite products');
+        return [];
+      }
 
+      debugPrint('Loading favorite products for user: ${user.id}');
+
+      // Use a left join to get all favorites, even if product might be missing
       final response = await _client
           .from('favorites')
           .select('''
-            product_id,
-            products!inner (
-              id,
-              name,
-              price,
-              image_url,
-              category,
-              description,
-              stock_quantity,
-              is_active
-            )
-          ''')
-          .eq('user_id', user.id)
-          .eq('products.is_active', true);
+          product_id,
+          products (
+            id,
+            name,
+            price,
+            image_url,
+            category,
+            description,
+            stock_quantity,
+            is_active,
+            material,
+            dimensions_cm,
+            weight_kg,
+            age_range,
+            safety_certified,
+            brand,
+            featured
+          )
+        ''')
+          .eq('user_id', user.id);
 
-      return response
+      debugPrint('Raw favorite products response: $response');
+
+      // Filter out any favorites where the product no longer exists or is inactive
+      final favoriteProducts = response
+          .where((item) =>
+      item['products'] != null &&
+          item['products']['is_active'] == true)
           .map<Map<String, dynamic>>((item) => item['products'])
           .toList();
+
+      debugPrint('Filtered favorite products: ${favoriteProducts.length} products');
+      return favoriteProducts;
     } catch (e) {
       debugPrint('Error loading favorite products: $e');
-      throw Exception('Failed to load favorite products');
+      throw Exception('Failed to load favorite products: $e');
     }
   }
 
   static Future<void> toggleFavorite(String productId) async {
     final user = _client.auth.currentUser;
-    if (user == null) throw Exception('User not authenticated');
+    if (user == null) {
+      debugPrint('❌ toggleFavorite: No authenticated user');
+      throw Exception('User not authenticated');
+    }
+
+    debugPrint('🔄 toggleFavorite: Starting for productId: $productId, userId: ${user.id}');
 
     try {
+      // Check if favorite already exists
+      debugPrint('🔍 Checking if favorite exists...');
       final existingFav = await _client
           .from('favorites')
-          .select()
+          .select('id')
           .eq('user_id', user.id)
           .eq('product_id', productId)
           .maybeSingle();
 
+      debugPrint('📋 Existing favorite result: $existingFav');
+
       if (existingFav != null) {
-        await _client
+        // Remove from favorites
+        debugPrint('🗑️ Removing from favorites...');
+        final deleteResult = await _client
             .from('favorites')
             .delete()
             .eq('user_id', user.id)
-            .eq('product_id', productId);
+            .eq('product_id', productId)
+            .select();
+
+        debugPrint('✅ Delete result: $deleteResult');
       } else {
-        await _client.from('favorites').insert({
+        // Add to favorites
+        debugPrint('➕ Adding to favorites...');
+        final insertData = {
           'user_id': user.id,
           'product_id': productId,
-        });
+          'created_at': DateTime.now().toIso8601String(),
+        };
+        debugPrint('📝 Insert data: $insertData');
+
+        final insertResult = await _client
+            .from('favorites')
+            .insert(insertData)
+            .select();
+
+        debugPrint('✅ Insert result: $insertResult');
       }
+
+      debugPrint('🎉 toggleFavorite completed successfully');
     } catch (e) {
-      debugPrint('Error toggling favorite: $e');
-      throw Exception('Failed to update favorites');
+      debugPrint('❌ toggleFavorite error: $e');
+      debugPrint('❌ Error type: ${e.runtimeType}');
+      throw Exception('Failed to update favorites: $e');
+    }
+  }
+
+// Add this method to check if a specific product is favorited
+  static Future<bool> isProductFavorited(String productId) async {
+    try {
+      final user = _client.auth.currentUser;
+      if (user == null) return false;
+
+      final response = await _client
+          .from('favorites')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('product_id', productId)
+          .maybeSingle();
+
+      return response != null;
+    } catch (e) {
+      debugPrint('Error checking if product is favorited: $e');
+      return false;
     }
   }
 

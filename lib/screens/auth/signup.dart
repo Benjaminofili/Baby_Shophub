@@ -248,14 +248,22 @@ class _SignUpPageState extends State<SignUpPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Center(
-                  //   child: Image.asset(
-                  //     'assets/Happybaby.gif', // Reverted to original static image
-                  //     width: 200,
-                  //     height: 200,
-                  //     fit: BoxFit.contain,
-                  //   ).animate().fadeIn(duration: 800.ms),
-                  // ),
+                  Center(
+                    child: Container(
+                      width: MediaQuery.of(context).size.width * 0.8,
+                      height: MediaQuery.of(context).size.height * 0.22,
+                      constraints: const BoxConstraints(
+                        minWidth: 200,
+                        maxWidth: 450,
+                        minHeight: 150,
+                        maxHeight: 300,
+                      ),
+                      child: Image.asset(
+                        'assets/logo.webp',
+                        fit: BoxFit.contain,
+                      ),
+                    ).animate().fadeIn(duration: 800.ms),
+                  ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Column(

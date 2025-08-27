@@ -13,40 +13,80 @@ class FavoritesPage extends StatefulWidget {
   State<FavoritesPage> createState() => _FavoritesPageState();
 }
 
-class _FavoritesPageState extends State<FavoritesPage> {
+class _FavoritesPageState extends State<FavoritesPage>
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   bool _isLoading = true;
   List<Map<String, dynamic>> _favoriteProducts = [];
   Set<String> _favoriteIds = {};
   String _error = '';
 
   @override
+  bool get wantKeepAlive => false; // Always get fresh data
+
+  @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadFavorites();
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh when app comes back to foreground
+      _loadFavorites();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Always reload when this page becomes active
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadFavorites();
+      }
+    });
+  }
+
   Future<void> _loadFavorites() async {
+    if (!mounted) return;
+
     try {
+      debugPrint('🔄 FavoritesPage: Loading favorites...');
       setState(() {
         _isLoading = true;
         _error = '';
       });
 
-      final favoriteProducts = await SupabaseService.getFavoriteProducts();
-      final favoriteIds = await SupabaseService.getUserFavorites();
+      // Load both favorites list and IDs in parallel
+      final results = await Future.wait([
+        SupabaseService.getFavoriteProducts(),
+        SupabaseService.getUserFavorites(),
+      ]);
+
+      final favoriteProducts = results[0] as List<Map<String, dynamic>>;
+      final favoriteIds = results[1] as Set<String>;
+
+      debugPrint('📊 FavoritesPage: Loaded ${favoriteProducts.length} products, ${favoriteIds.length} IDs');
 
       if (mounted) {
         setState(() {
           _favoriteProducts = favoriteProducts
-              .map(
-                (product) => SupabaseService.formatProductForDisplay(product),
-              )
+              .map((product) => SupabaseService.formatProductForDisplay(product))
               .toList();
           _favoriteIds = favoriteIds;
           _isLoading = false;
         });
       }
     } catch (e) {
+      debugPrint('❌ FavoritesPage: Error loading favorites: $e');
       if (mounted) {
         setState(() {
           _error = e.toString().replaceAll('Exception: ', '');
@@ -61,32 +101,51 @@ class _FavoritesPageState extends State<FavoritesPage> {
   }
 
   Future<void> _toggleFavorite(String productId) async {
-    try {
-      await SupabaseService.toggleFavorite(productId);
+    if (!mounted) return;
 
+    try {
+      debugPrint('🔄 FavoritesPage: Toggling favorite for $productId');
+
+      // Optimistic update for better UX
+      final wasLiked = _favoriteIds.contains(productId);
       setState(() {
-        if (_favoriteIds.contains(productId)) {
+        if (wasLiked) {
           _favoriteIds.remove(productId);
-          _favoriteProducts.removeWhere(
-            (product) => product['id'] == productId,
-          );
-        } else {
-          _favoriteIds.add(productId);
+          _favoriteProducts.removeWhere((product) => product['id'] == productId);
         }
+        // Note: We don't add products optimistically since we'd need the full product data
       });
 
-      _showSuccessSnackBar('Favorites updated');
+      await SupabaseService.toggleFavorite(productId);
+
+      // Force reload to ensure data consistency
+      await _loadFavorites();
+
+      if (mounted) {
+        _showSuccessSnackBar(
+            wasLiked ? 'Removed from favorites' : 'Added to favorites'
+        );
+      }
     } catch (e) {
-      _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
+      debugPrint('❌ FavoritesPage: Error toggling favorite: $e');
+      // Revert optimistic update on error
+      await _loadFavorites();
+      if (mounted) {
+        _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
+      }
     }
   }
 
   Future<void> _addToCart(Map<String, dynamic> product) async {
     try {
       await SupabaseService.addToCart(product['id']);
-      _showSuccessSnackBar('${product['name']} added to cart');
+      if (mounted) {
+        _showSuccessSnackBar('${product['name']} added to cart');
+      }
     } catch (e) {
-      _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
+      if (mounted) {
+        _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
+      }
     }
   }
 
@@ -95,11 +154,16 @@ class _FavoritesPageState extends State<FavoritesPage> {
       context,
       '/product-detail',
       arguments: {'productId': productId},
-    );
+    ).then((_) {
+      // Refresh favorites when returning from product detail
+      _loadFavorites();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
       appBar: AppBar(
@@ -110,8 +174,13 @@ class _FavoritesPageState extends State<FavoritesPage> {
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        automaticallyImplyLeading: false, // Remove back button for bottom nav
+        automaticallyImplyLeading: false,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadFavorites,
+            tooltip: 'Refresh favorites',
+          ),
           IconButton(
             icon: const Icon(Icons.account_circle),
             onPressed: () => Navigator.pushNamed(context, '/profile'),
@@ -155,9 +224,27 @@ class _FavoritesPageState extends State<FavoritesPage> {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           sliver: SliverToBoxAdapter(
-            child: Text(
-              '${_favoriteProducts.length} ${_favoriteProducts.length == 1 ? 'item' : 'items'} in favorites',
-              style: Theme.of(context).textTheme.headlineMedium,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_favoriteProducts.length} ${_favoriteProducts.length == 1 ? 'item' : 'items'} in favorites',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const SizedBox(height: 8),
+                // Debug info (remove in production)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Debug: ${_favoriteIds.length} favorite IDs\n${_favoriteIds.join(', ')}',
+                    style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -174,7 +261,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
               final product = _favoriteProducts[index];
               return DynamicProductCard(
                 product: product,
-                isFavorite: _favoriteProducts.contains(product['id']),
+                isFavorite: _favoriteIds.contains(product['id']),
                 onFavoriteTap: () => _toggleFavorite(product['id']),
                 onAddToCart: () => _addToCart(product),
                 onTap: () => _navigateToProductDetail(product['id']),
