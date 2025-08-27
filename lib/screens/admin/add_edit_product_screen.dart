@@ -100,6 +100,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       _isLoading = true;
     });
 
+    await AdminService.checkUserRole();
     try {
       if (widget.product == null) {
         // Create new product

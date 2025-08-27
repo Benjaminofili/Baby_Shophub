@@ -1,6 +1,5 @@
 // File: lib/services/admin_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart';
 
 class AdminService {
   static final SupabaseClient _supabase = Supabase.instance.client;
@@ -50,27 +49,74 @@ class AdminService {
     List<String>? imageUrls,
     List<String>? tags,
   }) async {
-    final response = await _supabase.from('products').insert({
-      'name': name,
-      'description': description,
-      'price': price,
-      'category': category,
-      'subcategory': subcategory,
-      'brand': brand,
-      'age_range': ageRange,
-      'material': material,
-      'weight_kg': weightKg,
-      'dimensions_cm': dimensionsCm,
-      'stock_quantity': stockQuantity,
-      'is_active': isActive,
-      'featured': featured,
-      'safety_certified': safetyCertified,
-      'image_url': imageUrl,
-      'image_urls': imageUrls,
-      'tags': tags,
-    }).select().single();
+    try {
+      // Debug: Print current user info
+      final user = _supabase.auth.currentUser;
+      print('Current user ID: ${user?.id}');
+      print('Current user email: ${user?.email}');
 
-    return response;
+      // Debug: Print the data being inserted
+      final productData = {
+        'name': name,
+        'description': description,
+        'price': price,
+        'category': category,
+        'subcategory': subcategory,
+        'brand': brand,
+        'age_range': ageRange,
+        'material': material,
+        'weight_kg': weightKg,
+        'dimensions_cm': dimensionsCm,
+        'stock_quantity': stockQuantity,
+        'is_active': isActive,
+        'featured': featured,
+        'safety_certified': safetyCertified,
+        'image_url': imageUrl,
+        'image_urls': imageUrls,
+        'tags': tags,
+      };
+
+      print('Product data to insert: $productData');
+
+      final response = await _supabase.from('products').insert(productData).select().single();
+
+      print('Product created successfully: $response');
+      return response;
+    } catch (e) {
+      // Detailed error logging
+      print('Error in createProduct: $e');
+
+      // Check if it's a PostgREST error
+      if (e is PostgrestException) {
+        print('PostgrestException details:');
+        print('Message: ${e.message}');
+        print('Code: ${e.code}');
+        print('Details: ${e.details}');
+      }
+
+      // Re-throw the error to maintain the original behavior
+      rethrow;
+    }
+  }
+
+  static Future<void> checkUserRole() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        // Get user profile to check role
+        final profile = await _supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+
+        print('User role: ${profile['role']}');
+      } else {
+        print('No user is currently authenticated');
+      }
+    } catch (e) {
+      print('Error checking user role: $e');
+    }
   }
 
   static Future<void> updateProduct(
@@ -162,9 +208,6 @@ class AdminService {
                 .maybeSingle();
             order['profiles'] = profile;
           } catch (e) {
-            if (kDebugMode) {
-              debugPrint('Error fetching profile for user $userId: $e');
-            }
             order['profiles'] = null;
           }
         }
@@ -177,9 +220,6 @@ class AdminService {
               .eq('order_id', order['id']);
           order['order_items'] = orderItems;
         } catch (e) {
-          if (kDebugMode) {
-            debugPrint('Error fetching order items for order ${order['id']}: $e');
-          }
           order['order_items'] = [];
         }
       }
@@ -209,9 +249,6 @@ class AdminService {
               .maybeSingle();
           orderResponse['profiles'] = profile;
         } catch (e) {
-          if (kDebugMode) {
-            debugPrint('Error fetching profile: $e');
-          }
           orderResponse['profiles'] = null;
         }
       }
@@ -224,9 +261,6 @@ class AdminService {
             .eq('order_id', orderId);
         orderResponse['order_items'] = orderItems;
       } catch (e) {
-        if (kDebugMode) {
-          debugPrint('Error fetching order items: $e');
-        }
         orderResponse['order_items'] = [];
       }
 
@@ -290,7 +324,21 @@ class AdminService {
       updates['delivered_at'] = DateTime.now().toIso8601String();
     }
 
-    await _supabase.from('orders').update(updates).eq('id', orderId);
+    try {
+      // Update the order
+      await _supabase.from('orders').update(updates).eq('id', orderId);
+
+      // Add to order status history
+      await _supabase.from('order_status_history').insert({
+        'order_id': orderId,
+        'status': newStatus,
+        'changed_by': _supabase.auth.currentUser?.id,
+        'changed_at': DateTime.now().toIso8601String(),
+        'notes': adminNotes,
+      });
+    } catch (e) {
+      rethrow;
+    }
   }
 
   // User Management
@@ -300,16 +348,24 @@ class AdminService {
     int limit = 100,
   }) async {
     try {
+      // Start with base query
       PostgrestFilterBuilder query = _supabase
           .from('profiles')
           .select('*');
 
+      // Apply search filter first (if provided)
       if (searchQuery != null && searchQuery.isNotEmpty) {
         query = query.or('full_name.ilike.%$searchQuery%,email.ilike.%$searchQuery%');
       }
 
-      if (role != null) {
-        query = query.eq('role', role);
+      // Apply role filter (if provided and not 'all')
+      if (role != null && role != 'all') {
+        // Handle potential null roles by defaulting to 'user'
+        if (role == 'user') {
+          query = query.or('role.eq.user,role.is.null');
+        } else {
+          query = query.eq('role', role);
+        }
       }
 
       final response = await query
@@ -318,27 +374,29 @@ class AdminService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error fetching users: $e');
-      }
       rethrow;
     }
   }
 
   static Future<Map<String, int>> getUsersCountByRole() async {
-    final response = await _supabase
-        .from('profiles')
-        .select('role');
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select('role');
 
-    final data = response as List;
-    final counts = <String, int>{'user': 0, 'admin': 0};
+      final data = response as List;
+      final counts = <String, int>{'user': 0, 'admin': 0};
 
-    for (final profile in data) {
-      final role = profile['role'] as String? ?? 'user';
-      counts[role] = (counts[role] ?? 0) + 1;
+      for (final profile in data) {
+        // Handle null roles as 'user' (default role)
+        final role = profile['role'] as String? ?? 'user';
+        counts[role] = (counts[role] ?? 0) + 1;
+      }
+
+      return counts;
+    } catch (e) {
+      rethrow;
     }
-
-    return counts;
   }
 
   static Future<Map<String, dynamic>> getUserDetails(String userId) async {
@@ -499,87 +557,10 @@ class AdminService {
 
       return sortedProducts.take(limit).toList();
     } catch (e) {
-      // Log error in debug mode only
-      if (kDebugMode) {
-        debugPrint('Error getting top selling products: $e');
-      }
       return [];
     }
   }
 
-  // Additional utility methods
-  static Future<bool> toggleProductStatus(String productId) async {
-    try {
-      // First get the current status
-      final product = await _supabase
-          .from('products')
-          .select('is_active')
-          .eq('id', productId)
-          .single();
-
-      final currentStatus = product['is_active'] as bool;
-
-      // Toggle the status
-      await _supabase
-          .from('products')
-          .update({
-        'is_active': !currentStatus,
-        'updated_at': DateTime.now().toIso8601String()
-      })
-          .eq('id', productId);
-
-      return !currentStatus;
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  static Future<void> bulkUpdateProductStatus(
-      List<String> productIds,
-      bool isActive,
-      ) async {
-    try {
-      await _supabase
-          .from('products')
-          .update({
-        'is_active': isActive,
-        'updated_at': DateTime.now().toIso8601String()
-      })
-          .inFilter('id', productIds);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  static Future<Map<String, dynamic>> getInventoryAlerts({
-    int lowStockThreshold = 10,
-  }) async {
-    try {
-      final lowStockProducts = await _supabase
-          .from('products')
-          .select('id, name, stock_quantity, category')
-          .lt('stock_quantity', lowStockThreshold)
-          .eq('is_active', true)
-          .order('stock_quantity', ascending: true);
-
-      final outOfStockProducts = await _supabase
-          .from('products')
-          .select('id, name, stock_quantity, category')
-          .eq('stock_quantity', 0)
-          .eq('is_active', true);
-
-      return {
-        'low_stock': lowStockProducts,
-        'out_of_stock': outOfStockProducts,
-        'low_stock_count': (lowStockProducts as List).length,
-        'out_of_stock_count': (outOfStockProducts as List).length,
-      };
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // Low Performing Products Analysis
   static Future<List<Map<String, dynamic>>> getLowPerformingProducts({
     int days = 30,
     int limit = 10,
@@ -642,9 +623,6 @@ class AdminService {
 
       return lowPerformingProducts.take(limit).toList();
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error getting low performing products: $e');
-      }
       return [];
     }
   }
@@ -757,6 +735,78 @@ class AdminService {
         'pending_reviews': pendingReviews,
         'average_rating': averageRating,
         'rating_distribution': ratingDistribution,
+      };
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Additional utility methods
+  static Future<bool> toggleProductStatus(String productId) async {
+    try {
+      // First get the current status
+      final product = await _supabase
+          .from('products')
+          .select('is_active')
+          .eq('id', productId)
+          .single();
+
+      final currentStatus = product['is_active'] as bool;
+
+      // Toggle the status
+      await _supabase
+          .from('products')
+          .update({
+        'is_active': !currentStatus,
+        'updated_at': DateTime.now().toIso8601String()
+      })
+          .eq('id', productId);
+
+      return !currentStatus;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  static Future<void> bulkUpdateProductStatus(
+      List<String> productIds,
+      bool isActive,
+      ) async {
+    try {
+      await _supabase
+          .from('products')
+          .update({
+        'is_active': isActive,
+        'updated_at': DateTime.now().toIso8601String()
+      })
+          .inFilter('id', productIds);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> getInventoryAlerts({
+    int lowStockThreshold = 10,
+  }) async {
+    try {
+      final lowStockProducts = await _supabase
+          .from('products')
+          .select('id, name, stock_quantity, category')
+          .lt('stock_quantity', lowStockThreshold)
+          .eq('is_active', true)
+          .order('stock_quantity', ascending: true);
+
+      final outOfStockProducts = await _supabase
+          .from('products')
+          .select('id, name, stock_quantity, category')
+          .eq('stock_quantity', 0)
+          .eq('is_active', true);
+
+      return {
+        'low_stock': lowStockProducts,
+        'out_of_stock': outOfStockProducts,
+        'low_stock_count': (lowStockProducts as List).length,
+        'out_of_stock_count': (outOfStockProducts as List).length,
       };
     } catch (e) {
       rethrow;

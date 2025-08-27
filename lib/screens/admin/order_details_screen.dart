@@ -38,6 +38,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   Future<void> _loadOrderDetails() async {
+    if (!mounted) return;
+
     try {
       setState(() {
         _isLoading = true;
@@ -46,6 +48,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
       final details = await AdminService.getOrderById(widget.orderId);
 
+      if (!mounted) return;
+
       setState(() {
         _orderDetails = details;
         _trackingController.text = details?['tracking_number'] ?? '';
@@ -53,6 +57,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _error = e.toString();
         _isLoading = false;

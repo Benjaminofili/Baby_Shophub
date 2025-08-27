@@ -1,5 +1,6 @@
 // File: lib/screens/admin/admin_users_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../../services/admin_service.dart';
 import '../../../components/loading_widget.dart';
 import '../../../components/error_widget.dart';
@@ -41,6 +42,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen>
     super.dispose();
   }
 
+  // Updated _loadUsers method in AdminUsersScreen
   Future<void> _loadUsers([String? role]) async {
     try {
       setState(() {
@@ -53,22 +55,27 @@ class _AdminUsersScreenState extends State<AdminUsersScreen>
         role: role == 'all' ? null : role,
       );
 
-      setState(() {
-        _users = users;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _users = users;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  // In _loadUserCounts method
+// Updated _loadUserCounts method
   Future<void> _loadUserCounts() async {
     try {
       final counts = await AdminService.getUsersCountByRole();
+
       if (mounted) {
         setState(() {
           _userCounts = counts;
