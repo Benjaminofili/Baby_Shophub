@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Match these colors to your Flutter theme -->
+    <color name="splash_background">#F8F9FA</color>
+    <color name="primary_color">#F4A261</color>
+</resources>
