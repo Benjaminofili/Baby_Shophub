@@ -185,7 +185,7 @@ class _DynamicProductCardState extends State<DynamicProductCard> {
                       // Price section
                       _buildPriceSection(price),
 
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
 
                       // Add to cart button - Fixed height
                       if (widget.showAddToCart)
