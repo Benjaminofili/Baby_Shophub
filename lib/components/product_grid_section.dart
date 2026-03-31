@@ -51,7 +51,7 @@ class ProductGridSection extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.7, // Adjusted for better proportions
+              childAspectRatio: 0.65, // Adjusted for better proportions
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
             ),
@@ -93,7 +93,7 @@ class ProductGridSection extends StatelessWidget {
               // Calculate how many columns based on screen width
               final screenWidth = constraints.maxWidth;
               int crossAxisCount = 2; // Default for mobile
-              double childAspectRatio = 0.7; // Default aspect ratio
+              double childAspectRatio = 0.65; // Default aspect ratio
 
               if (screenWidth > 600) {
                 crossAxisCount = 3; // Tablet

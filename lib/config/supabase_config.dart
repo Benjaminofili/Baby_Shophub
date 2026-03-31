@@ -1,8 +1,8 @@
 // lib/config/supabase_config.dart
 class SupabaseConfig {
-  static const String supabaseUrl = 'https://xwnlkrxdmpocxyetksdi.supabase.co';
+  static const String supabaseUrl = 'https://uplzgksjtlxynpcshtme.supabase.co';
   static const String supabaseAnonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3bmxrcnhkbXBvY3h5ZXRrc2RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyMDI0ODUsImV4cCI6MjA3MDc3ODQ4NX0.nlLivPbtpQKqvcKxL6uymXre_a3Sc-rKJMSuLiV5pYc';
+'sb_publishable_y9QC1dF_4rZAkhqC5Xm1Eg_m8Uqor8K';
 
   // App-specific configuration
   static const String appName = 'BabyShopHub';

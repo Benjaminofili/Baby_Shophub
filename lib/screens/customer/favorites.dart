@@ -231,19 +231,6 @@ class _FavoritesPageState extends State<FavoritesPage>
                   '${_favoriteProducts.length} ${_favoriteProducts.length == 1 ? 'item' : 'items'} in favorites',
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
-                const SizedBox(height: 8),
-                // Debug info (remove in production)
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Debug: ${_favoriteIds.length} favorite IDs\n${_favoriteIds.join(', ')}',
-                    style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
-                  ),
-                ),
               ],
             ),
           ),
@@ -255,7 +242,7 @@ class _FavoritesPageState extends State<FavoritesPage>
               crossAxisCount: 2,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 0.75,
+              childAspectRatio: 0.65,
             ),
             delegate: SliverChildBuilderDelegate((context, index) {
               final product = _favoriteProducts[index];

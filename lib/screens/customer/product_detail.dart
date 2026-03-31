@@ -644,15 +644,18 @@ class _ProductDetailState extends State<ProductDetail>
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (index) {
-                        return Icon(
-                          index < averageRating.floor() ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
-                          size: 24,
-                        );
-                      }),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (index) {
+                          return Icon(
+                            index < averageRating.floor() ? Icons.star : Icons.star_border,
+                            color: Colors.amber,
+                            size: 24,
+                          );
+                        }),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(

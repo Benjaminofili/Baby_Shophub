@@ -196,25 +196,28 @@ class _EnhancedReviewDialogState extends State<EnhancedReviewDialog> {
           child: Column(
             children: [
               // Star rating
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) {
-                  final rating = index + 1;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedRating = rating),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        rating <= _selectedRating ? Icons.star : Icons.star_border,
-                        color: rating <= _selectedRating
-                            ? Colors.amber
-                            : Colors.grey.shade400,
-                        size: 40,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    final rating = index + 1;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedRating = rating),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(
+                          rating <= _selectedRating ? Icons.star : Icons.star_border,
+                          color: rating <= _selectedRating
+                              ? Colors.amber
+                              : Colors.grey.shade400,
+                          size: 40,
+                        ),
                       ),
-                    ),
-                  );
-                }),
+                    );
+                  }),
+                ),
               ),
               const SizedBox(height: 16),
               // Rating emoji and description

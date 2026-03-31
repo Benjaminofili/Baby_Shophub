@@ -135,63 +135,55 @@ class _DynamicProductCardState extends State<DynamicProductCard> {
             children: [
               // Image section - Flexible but with constraints
               Expanded(
-                flex: 3, // Takes 60% of available height
                 child: _buildImageSection(product),
               ),
 
-              // Content section - Flexible
-              Expanded(
-                flex: 2, // Takes 40% of available height
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Product name - Give it more weight in flexible layout
-                      Flexible(
-                        flex: 2, // Give more space to product name
-                        child: Text(
-                          product['name'] ?? 'Unknown Product',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                            height: 1.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+              // Content section - flexible according to content height
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Product name
+                    Text(
+                      product['name'] ?? 'Unknown Product',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                        height: 1.2,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
 
-                      const SizedBox(height: 4),
+                    const SizedBox(height: 4),
 
-                      // Material/Category info - Single line
-                      Text(
-                        product['material'] != null
-                            ? 'Material: ${product['material']}'
-                            : product['category'] ?? 'Unknown',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: AppTheme.textSecondary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    // Material/Category info - Single line
+                    Text(
+                      product['material'] != null
+                          ? 'Material: ${product['material']}'
+                          : product['category'] ?? 'Unknown',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppTheme.textSecondary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
 
-                      // Spacer to push price and button to bottom
-                      const Spacer(),
+                    const SizedBox(height: 8),
 
-                      // Price section
-                      _buildPriceSection(price),
+                    // Price section
+                    _buildPriceSection(price),
 
-                      const SizedBox(height: 4),
+                    const SizedBox(height: 8),
 
-                      // Add to cart button - Fixed height
-                      if (widget.showAddToCart)
-                        _buildAddToCartButton(stockQuantity),
-                    ],
-                  ),
+                    // Add to cart button - Fixed height
+                    if (widget.showAddToCart)
+                      _buildAddToCartButton(stockQuantity),
+                  ],
                 ),
               ),
             ],
