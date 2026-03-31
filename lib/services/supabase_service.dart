@@ -740,7 +740,7 @@ class SupabaseService {
         'payment_method': paymentDetails['method'],
         'payment_status': paymentDetails['method'] == 'cash' ? 'pending' : 'paid',
         'tracking_number': _generateTrackingNumber(),
-        'estimated_delivery': DateTime.now().add(Duration(days: 3)),
+        'estimated_delivery': DateTime.now().add(Duration(days: 3)).toIso8601String(),
       }).select().single();
 
       // Create order items

@@ -120,7 +120,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           crossAxisCount: 2,
           shrinkWrap: true,
           physics: NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.5,
+          childAspectRatio: 1.25,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           children: [
@@ -225,7 +225,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
               ],
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
               value,
               style: TextStyle(
@@ -233,6 +233,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
               title,
@@ -240,6 +242,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 fontSize: 14,
                 color: AppTheme.textSecondary,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
