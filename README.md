@@ -15,6 +15,14 @@ A modern Flutter mobile application for browsing and purchasing high-quality bab
 - **🌐 Backend Integration**: Real-time database with Supabase
 - **🔐 Secure**: Permission handling and secure authentication
 
+## 📸 Screenshots
+
+| Home Screen | Admin Profile |
+|---|---|
+| ![Home Screen](assets/baby_home.jpg) | ![Admin Profile](assets/Admin-profile.jpg) |
+
+*Browse baby products and manage your profile with ease*
+
 ## 🛠️ Tech Stack
 
 ### Frontend
